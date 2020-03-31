@@ -5,6 +5,7 @@
 
 import os
 import sys
+import datetime
 
 # import Cockpit's machinery for test VMs and its browser test API
 TEST_DIR = os.path.dirname(__file__)
@@ -14,11 +15,6 @@ import testlib
 
 
 class TestApplication(testlib.MachineCase):
-    def createCertificate(self, nickName):
-        m = self.machine
-
-        m.execute("selfsign-getcert request -d /etc/pki/nssdb -n {0}".format(nickName))
-
     def testEmptyState(self):
         b = self.browser
         m = self.machine
@@ -29,35 +25,113 @@ class TestApplication(testlib.MachineCase):
         self.login_and_go("/certificates")
 
         b.wait_not_present(".pf-c-empty-state")
-        b.wait_text(".container-fluid h2", "Certificates")
+        b.wait_in_text(".ct-table-header h3", "Certificates")
 
         # Check Empty State is present if service was stopped when certificates page is open
         m.execute("systemctl stop certmonger.service")
-        b.wait_text(".pf-c-empty-state h1", "The certificate service is not active")
+        b.wait_in_text(".pf-c-empty-state h1", "The certificate service is not active")
 
         # Check Starting service from UI works
         b.click(".pf-c-empty-state button:contains(Start the certificate service)")
 
         b.wait_not_present(".pf-c-empty-state")
-        b.wait_text(".container-fluid h2", "Certificates")
+        b.wait_in_text(".ct-table-header h3", "Certificates")
 
         # Check check stopping and starting UI from command line reflects state of UI
         m.execute("systemctl stop certmonger.service")
-        b.wait_text(".pf-c-empty-state h1", "The certificate service is not active")
+        b.wait_in_text(".pf-c-empty-state h1", "The certificate service is not active")
 
         m.execute("systemctl start certmonger.service")
         b.wait_not_present(".pf-c-empty-state")
-        b.wait_text(".container-fluid h2", "Certificates")
+        b.wait_in_text(".ct-table-header h3", "Certificates")
 
-    def testBasic(self):
+    def testNoCertificates(self):
         b = self.browser
         m = self.machine
 
-        self.createCertificate("Server-Cert")
-
         self.login_and_go("/certificates")
         # verify expected heading
-        b.wait_text(".container-fluid h2", "Certificates")
+        b.wait_in_text(".ct-table-header h3", "Certificates")
+        b.wait_in_text(".ct-table-empty tr td", "No certificate is tracked on this host")
+
+    def testNssdbCert(self):
+        b = self.browser
+        m = self.machine
+
+        next_year = datetime.datetime.now() + datetime.timedelta(days=365)
+        next_year_str = next_year.strftime('%d/%m/%Y')
+
+        cert_name = "Server-Cert"
+        db_path = "/etc/pki/nssdb"
+        m.execute("selfsign-getcert request -d {0} -n {1}".format(db_path, cert_name))
+
+        self.login_and_go("/certificates")
+        # Verify expected heading
+        b.wait_in_text(".ct-table-header h3", "Certificates")
+
+        # Check cert header
+        b.wait_in_text("#certificate-0-name", cert_name)
+        b.wait_in_text("#certificate-0-validity", "Auto-renews before {0}".format(next_year_str))
+        b.wait_in_text("#certificate-0-ca", "SelfSign")
+
+        b.click("button#expandable-toggle0")
+        # Check General tab
+        b.wait_in_text("#certificate-0-general-status", "Monitoring")
+        b.wait_in_text("#certificate-0-general-ca", "SelfSign")
+        b.wait_in_text("#certificate-0-general-validity", " to {0}".format(next_year_str)) # TODO better date handling
+        b.wait_in_text("#certificate-0-general-autorenewal", "Yes")
+
+        b.click("#certificate-0-keys-tab")
+        # Check Key tab
+        b.wait_in_text("#certificate-0-key-nickname", cert_name)
+        b.wait_in_text("#certificate-0-key-type", "RSA")
+        b.wait_in_text("#certificate-0-key-token", "NSS Certificate DB")
+        b.wait_in_text("#certificate-0-key-storage", "NSSDB")
+        b.wait_in_text("#certificate-0-key-location", db_path)
+
+        b.click("#certificate-0-cert-tab")
+        # Check Cert tab
+        b.wait_in_text("#certificate-0-cert-nickname", cert_name)
+        b.wait_in_text("#certificate-0-cert-token", "NSS Certificate DB")
+        b.wait_in_text("#certificate-0-cert-storage", "NSSDB")
+        b.wait_in_text("#certificate-0-cert-location", db_path)
+
+    def testFileCert(self):
+        b = self.browser
+        m = self.machine
+
+        next_year = datetime.datetime.now() + datetime.timedelta(days=365)
+        next_year_str = next_year.strftime('%d/%m/%Y')
+
+        cert_path = "/tmp/myCert.cert"
+        key_path = "/tmp/myKey.cert"
+        m.execute("selfsign-getcert request -f {0} -k {1}".format(cert_path, key_path))
+
+        self.login_and_go("/certificates")
+        # Verify expected heading
+        b.wait_in_text(".ct-table-header h3", "Certificates")
+
+        # Check cert header
+        b.wait_in_text("#certificate-0-validity", "Auto-renews before {0}".format(next_year_str))
+        b.wait_in_text("#certificate-0-ca", "SelfSign")
+
+        b.click("button#expandable-toggle0")
+        # Check General tab
+        b.wait_in_text("#certificate-0-general-status", "Monitoring")
+        b.wait_in_text("#certificate-0-general-ca", "SelfSign")
+        b.wait_in_text("#certificate-0-general-validity", " to {0}".format(next_year_str))
+        b.wait_in_text("#certificate-0-general-autorenewal", "Yes")
+
+        b.click("#certificate-0-keys-tab")
+        # Check Key tab
+        b.wait_in_text("#certificate-0-key-type", "RSA")
+        b.wait_in_text("#certificate-0-key-storage", "FILE")
+        b.wait_in_text("#certificate-0-key-location", key_path)
+
+        b.click("#certificate-0-cert-tab")
+        # Check Cert tab
+        b.wait_in_text("#certificate-0-cert-storage", "FILE")
+        b.wait_in_text("#certificate-0-cert-location", cert_path)
 
 
 if __name__ == '__main__':

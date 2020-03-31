@@ -15,6 +15,7 @@ const builddir = (process.env.SRCDIR || __dirname);
 const distdir = builddir + path.sep + "dist";
 const section = process.env.ONLYDIR || null;
 const nodedir = path.resolve((process.env.SRCDIR || __dirname), "node_modules");
+const libdir = path.resolve((process.env.SRCDIR || __dirname), "lib");
 
 /* A standard nodejs and webpack pattern */
 var production = process.env.NODE_ENV === 'production';
@@ -142,7 +143,18 @@ module.exports = {
                     },
                     {
                         loader: 'sass-loader',
-                    }
+                    },
+                    {
+                        loader: 'sass-resources-loader',
+                            // Make PF3 and PF4 variables globably accessible to be used by the components scss
+                            options: {
+                                resources: [
+                                    path.resolve(libdir, './_global-variables.scss'),
+                                    path.resolve(nodedir, './@patternfly/patternfly/patternfly-variables.scss'),
+                                    path.resolve(nodedir, './patternfly/dist/sass/patternfly/_variables.scss')
+                                ],
+                            },
+                    },
                 ]
             },
             {
@@ -157,6 +169,19 @@ module.exports = {
                     }
                 ]
             },
+            {
+                // See https://github.com/patternfly/patternfly-react/issues/3815 and
+                // [Redefine grid breakpoints] section in pkg/lib/_global-variables.scss for more details
+                // Components which are using the pf-global--breakpoint-* variables should import scss manually
+                // instead off the automatically imported CSS stylesheets
+                test: /\.css$/,
+                include: stylesheet => {
+                    return (
+                        stylesheet.includes('@patternfly/react-styles/css/components/Table/')
+                    );
+                },
+                use: ["null-loader"]
+            }
         ]
     },
     plugins: plugins
