@@ -25,6 +25,8 @@ import { Alert, AlertGroup, AlertActionCloseButton, AlertVariant } from '@patter
 import EmptyState from "./emptyState.jsx";
 import * as service from "../lib/service.js";
 
+import CertificateList from "./certificateList.jsx";
+
 const _ = cockpit.gettext;
 const CERTMONGER_SERVICE_NAME = "certmonger.service";
 
@@ -90,7 +92,10 @@ export class Application extends React.Component {
         const { certmongerService, startErrorMessage } = this.state;
 
         const certificatesBody = (
-            <h2>{_("Certificates")}</h2>
+            <>
+                <h2>{_("Certificates")}</h2>
+                <CertificateList addAlert={this.addAlert}/>
+            </>
         );
 
         const emptyStateBody = (

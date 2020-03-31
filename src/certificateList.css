@@ -1,0 +1,11 @@
+.pf-c-accordion__expanded-content.pf-m-fixed {
+    max-height: 30rem;
+}
+
+.pf-c-data-list__expandable-content .pf-c-data-list__expandable-content-body {
+    padding: 0 0 0 3px;
+}
+
+.certificate-tab-body {
+    padding: 20px;
+}
