@@ -22,7 +22,9 @@ import React from "react";
 import "./app.scss";
 
 import { Alert, AlertGroup, AlertActionCloseButton, AlertVariant } from '@patternfly/react-core';
+
 import EmptyState from "./emptyState.jsx";
+import { getRequests, getRequest, getCAs, getCA } from './dbus.js';
 import * as service from "../lib/service.js";
 
 import CertificateList from "./certificateList.jsx";
@@ -37,6 +39,7 @@ export class Application extends React.Component {
             alerts: [],
             certmongerService: undefined,
             initialPhase: true,
+            cas: [],
         };
 
         this.addAlert = this.addAlert.bind(this);
@@ -60,6 +63,20 @@ export class Application extends React.Component {
     componentDidMount() {
         this.subscribeToSystemd();
         this.updateCertmongerService();
+        this.getCertificateAuthorities();
+    }
+
+    getCertificateAuthorities() {
+        getCAs().then(paths => {
+                    paths[0].forEach(path => {
+                        getCA(path)
+                                .then(ret => {
+                                    const ca = { path: path, obj: ret[0] };
+                                    this.setState({ cas: {...this.state.cas, [path]: ret[0]} });
+                                });
+                    });
+                })
+                .catch(error => this.addAlert(_("Error: ") + error.name, error.message));
     }
 
     subscribeToSystemd() {
@@ -89,10 +106,10 @@ export class Application extends React.Component {
     }
 
     render() {
-        const { certmongerService, startErrorMessage } = this.state;
+        const { certmongerService, startErrorMessage, cas } = this.state;
 
         const certificatesBody = (
-            <CertificateList addAlert={this.addAlert}/>
+            <CertificateList cas={cas} addAlert={this.addAlert}/>
         );
 
         const emptyStateBody = (

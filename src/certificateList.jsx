@@ -40,6 +40,7 @@ import {
     TabContent
 } from "@patternfly/react-core";
 
+import { RequestCertificate } from './requestCertificate.jsx';
 import "../lib/form-layout.scss";
 import { ListingPanel } from "../lib/cockpit-components-listing-panel.jsx";
 import { ListingTable } from "../lib/cockpit-components-table.jsx";
@@ -188,7 +189,6 @@ class CertificateList extends React.Component {
         super();
         this.state = {
             certs: [],
-            cas: {},
             expanded: [],
             activeTabKey: 0,
         };
@@ -203,23 +203,10 @@ class CertificateList extends React.Component {
         getRequests()
                 .then(paths => {
                     paths[0].forEach(p => {
-                        let caPath;
                         return getRequest(p)
                                 .then(ret => {
                                     const certs = [...this.state.certs, ret[0]];
                                     this.onValueChanged("certs", certs);
-
-                                    if (ret[0].ca) {
-                                        // TODO report bug
-                                        caPath = ret[0].ca.v.replace("request", "ca");
-                                        return getCA(caPath);
-                                    }
-                                })
-                                .then(ret => {
-                                    if (ret) {
-                                        const cas = {...this.state.cas, [caPath]: ret[0]};
-                                        this.onValueChanged("cas", cas);
-                                    }
                                 })
                     });
                 })
@@ -246,7 +233,8 @@ class CertificateList extends React.Component {
     }
 
     render() {
-        const { cas, certs} = this.state;
+        const { certs} = this.state;
+        const { cas, addAlert } = this.props;
 
         const items = certs.map((cert, idx) => {
             const idPrefix = cockpit.format("certificate-$0", idx);
@@ -306,6 +294,10 @@ class CertificateList extends React.Component {
             };
         });
 
+        const actions = (
+            <RequestCertificate cas={cas} addAlert={addAlert} />
+        );
+
         return (
             <ListingTable caption={_("Certificates")}
                 variant='compact'
@@ -315,6 +307,7 @@ class CertificateList extends React.Component {
                     { title: _("Validity") },
                     { title: _("Certificate Authority") },
                 ]}
+                actions={actions}
                 rows={items} />
         );
     }
