@@ -205,7 +205,7 @@ class CertificateList extends React.Component {
                     paths[0].forEach(p => {
                         return getRequest(p)
                                 .then(ret => {
-                                    const certs = [...this.state.certs, ret[0]];
+                                    const certs = [...this.state.certs, { path: p, obj: ret[0] }];
                                     this.onValueChanged("certs", certs);
                                 })
                     });
@@ -235,6 +235,7 @@ class CertificateList extends React.Component {
     render() {
         const { certs} = this.state;
         const { cas, addAlert } = this.props;
+        console.log(certs, cas);
 
         const items = certs.map((cert, idx) => {
             const idPrefix = cockpit.format("certificate-$0", idx);
@@ -244,24 +245,24 @@ class CertificateList extends React.Component {
                     name: _("General"),
                     id: idPrefix + "-general-tab",
                     renderer: generalDetails,
-                    data: { idPrefix, cas, cert }
+                    data: { idPrefix, cas, cert.obj }
                 },
                 {
                     name: _("Keys"),
                     id: idPrefix + "-keys-tab",
                     renderer: keyDetails,
-                    data: { idPrefix, cert }
+                    data: { idPrefix, cert.obj }
                 },
                 {
                     name: _("Cert"),
                     id: idPrefix + "-cert-tab",
                     renderer: certDetails,
-                    data: { idPrefix, cert }
+                    data: { idPrefix, cert.obj }
                 },
             ];
 
             const expandedContent = (<ListingPanel colSpan='4' tabRenderers={tabRenderers} />);
-            let caTitle = getCAName(cas, cert);
+            let caTitle = getCAName(cas, cert.obj);
             if (caTitle !== "SelfSign") {
                 caTitle = (
                     <Badge id={`${idPrefix}-ca`}>
@@ -278,14 +279,14 @@ class CertificateList extends React.Component {
 
             return {
                 columns: [
-                    { title: (cert["cert-nickname"] && cert["cert-nickname"].v)
-                        ? <span id={`${idPrefix}-name`}>{cert["cert-nickname"].v}</span>
+                    { title: (cert.obj["cert-nickname"] && cert.obj["cert-nickname"].v)
+                        ? <span id={`${idPrefix}-name`}>{cert.obj["cert-nickname"].v}</span>
                         : <span id={`${idPrefix}-name`}>
-                              {cert["nickname"].v +  _(" (Request ID)")}
+                              {cert.obj["nickname"].v +  _(" (Request ID)")}
                           </span> },
-                    { title: cert["not-valid-after"] && cert["not-valid-after"].v !== 0 &&
-                        <span id={`${idPrefix}-validity`}>{getExpirationTime(cert)}</span> },
-                    { title: cert.ca && cert.ca.v && caTitle },
+                    { title: cert.obj["not-valid-after"] && cert.obj["not-valid-after"].v !== 0 &&
+                        <span id={`${idPrefix}-validity`}>{getExpirationTime(cert.obj)}</span> },
+                    { title: cert.obj.ca && cert.obj.ca.v && caTitle },
                 ],
                 rowId: idPrefix,
                 props: { key: idPrefix },
