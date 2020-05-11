@@ -41,6 +41,7 @@ import {
 } from "@patternfly/react-core";
 
 import { RequestCertificate } from './requestCertificate.jsx';
+import { CertificateActions } from "./certificateActions.jsx";
 import "../lib/form-layout.scss";
 import { ListingPanel } from "../lib/cockpit-components-listing-panel.jsx";
 import { ListingTable } from "../lib/cockpit-components-table.jsx";
@@ -245,19 +246,19 @@ class CertificateList extends React.Component {
                     name: _("General"),
                     id: idPrefix + "-general-tab",
                     renderer: generalDetails,
-                    data: { idPrefix, cas, cert.obj }
+                    data: { idPrefix, cas, cert: cert.obj }
                 },
                 {
                     name: _("Keys"),
                     id: idPrefix + "-keys-tab",
                     renderer: keyDetails,
-                    data: { idPrefix, cert.obj }
+                    data: { idPrefix, cert: cert.obj }
                 },
                 {
                     name: _("Cert"),
                     id: idPrefix + "-cert-tab",
                     renderer: certDetails,
-                    data: { idPrefix, cert.obj }
+                    data: { idPrefix, cert: cert.obj }
                 },
             ];
 
@@ -287,6 +288,7 @@ class CertificateList extends React.Component {
                     { title: cert.obj["not-valid-after"] && cert.obj["not-valid-after"].v !== 0 &&
                         <span id={`${idPrefix}-validity`}>{getExpirationTime(cert.obj)}</span> },
                     { title: cert.obj.ca && cert.obj.ca.v && caTitle },
+                    { title: <CertificateActions cert={cert} addAlert={addAlert} idPrefix={idPrefix} /> },
                 ],
                 rowId: idPrefix,
                 props: { key: idPrefix },
@@ -307,6 +309,7 @@ class CertificateList extends React.Component {
                     { title: _("Name") },
                     { title: _("Validity") },
                     { title: _("Certificate Authority") },
+                    { title: _("Actions") },
                 ]}
                 actions={actions}
                 rows={items} />
