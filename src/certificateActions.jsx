@@ -49,6 +49,13 @@ export class CertificateActions extends React.Component {
         this.setState({ [key]: value });
     }
 
+    onResubmit() {
+        const { cert } = this.props;
+
+        removeRequest(cert.path)
+                .catch(error => addAlert(_("Error: ") + error.name, error.message));
+    }
+
     onRemove() {
         const { cert } = this.props;
 
@@ -61,6 +68,10 @@ export class CertificateActions extends React.Component {
         const { dropdownOpen } = this.state;
 
         const dropdownItems = [
+            <DropdownItem key={`${idPrefix}-resubmit`} id={`${idPrefix}-resubmit`} onClick={this.onResubmit}>
+                {_("Resubmit")}
+            </DropdownItem>,
+            <DropdownSeparator key={`${idPrefix}-separator`}/>,
             <DropdownItem className="pf-m-danger" key={`${idPrefix}-remove`} id={`${idPrefix}-remove`} onClick={this.onRemove}>
                 {_("Remove")}
             </DropdownItem>,

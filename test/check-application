@@ -139,7 +139,7 @@ class TestApplication(testlib.MachineCase):
 
         self.login_and_go("/certificates")
         # verify expected heading
-        b.wait_text(".ct-table-header h3", "Certificates")
+        b.wait_in_text(".ct-table-header h3", "Certificates")
 
         class RequestCertDialog(object):
             def __init__(
@@ -186,23 +186,23 @@ class TestApplication(testlib.MachineCase):
             def verify_frontend(self):
                 b.reload()
                 b.enter_page('/certificates')
-                b.wait_text(".ct-table-header h3", "Certificates")
+                b.wait_in_text(".ct-table-header h3", "Certificates")
 
                 b.click("button#expandable-toggle0")
                 if self.storage_type == "NSSDB":
                     if self.nickname:
-                        b.wait_text("#certificate-0-name", self.nickname)
+                        b.wait_in_text("#certificate-0-name", self.nickname)
                         b.click("#certificate-0-cert-tab")
-                        b.wait_text("#certificate-0-cert-storage", "NSSDB")
+                        b.wait_in_text("#certificate-0-cert-storage", "NSSDB")
                         b.click("#certificate-0-keys-tab")
-                        b.wait_text("#certificate-0-keys-storage", "NSSDB")
+                        b.wait_in_text("#certificate-0-keys-storage", "NSSDB")
                 else:
                     if self.key_path:
                         b.click("#certificate-0-keys-tab")
-                        b.wait_text("#certificate-0-key-location", self.key_path)
+                        b.wait_in_text("#certificate-0-key-location", self.key_path)
                     if self.cert_path:
                         b.click("#certificate-0-cert-tab")
-                        b.wait_text("#certificate-0-cert-location", self.cert_path)
+                        b.wait_in_text("#certificate-0-cert-location", self.cert_path)
 
             def verify_backend(self):
                 if self.storage_type == "NSSDB":
