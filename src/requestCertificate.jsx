@@ -23,16 +23,20 @@ import moment from "moment";
 import { Modal } from "patternfly-react";
 import {
     Button,
+    FormGroup,
+    Form,
     Radio,
+    TextArea,
     TextInput
 } from "@patternfly/react-core";
 
-import { addRequest } from "./dbus.js";
+import { addRequest, modifyRequest, resubmitRequest } from "./dbus.js";
 import "../lib/form-layout.scss";
 import { ModalError } from "../lib/cockpit-components-inline-notification.jsx";
 import { FileAutoComplete } from "../lib/cockpit-components-file-autocomplete.jsx";
 import * as Select from "../lib/cockpit-components-select.jsx";
 import "./requestCertificate.scss";
+import { getCAName } from "./helpers.js";
 
 const _ = cockpit.gettext;
 
@@ -83,6 +87,69 @@ const CAsRow = ({ onValueChanged, dialogValues, cas }) => {
     );
 };
 
+const SetSigningParametersRow = ({ onValueChanged, dialogValues }) => {
+    return (
+        <label className='checkbox-inline'>
+            <input id='set-signing-parameters'
+                type='checkbox'
+                checked={dialogValues.signingParameters}
+                onChange={e => onValueChanged("signingParameters", !dialogValues.signingParameters)} />
+            {_("Set optional signing request parameters")}
+        </label>
+    );
+};
+
+const SubjectNameRow = ({ onValueChanged, dialogValues }) => {
+    return (
+        <>
+            <label className="control-label" htmlFor="subject-name">
+                {_("Subject name")}
+            </label>
+            <TextInput value={dialogValues.subjectName}
+                id="subject-name"
+                type="text"
+                onChange={(value) => onValueChanged("subjectName", value)}
+                aria-label={_("SubjectName input text")} />
+        </>
+    );
+};
+
+const DNSNameRow = ({ onValueChanged, dialogValues }) => {
+    return (
+        <>
+            <label className="control-label" htmlFor="dns-name">
+                {_("DNS names")}
+            </label>
+            <Form>
+                <FormGroup validated="default"
+                    className="dns-helper-text"
+                    helperText={_("Comma separated list of DNS names. Example: example.com,sub.example.com")}>
+                    <TextArea value={dialogValues.dnsName}
+                        id="dns-name"
+                        onChange={(value) => onValueChanged("dnsName", value)}
+                        resizeOrientation='vertical'
+                        aria-label={_("DNSName input text")} />
+                </FormGroup>
+            </Form>
+        </>
+    );
+};
+
+const PrincipalNameRow = ({ onValueChanged, dialogValues }) => {
+    return (
+        <>
+            <label className="control-label" htmlFor="principal-name">
+                {_("Principal name")}
+            </label>
+            <TextInput value={dialogValues.principalName}
+                id="principal-name"
+                type="text"
+                onChange={(value) => onValueChanged("principalName", value)}
+                aria-label={_("PrincipalName input text")} />
+        </>
+    );
+};
+
 const NicknameRow = ({ onValueChanged, dialogValues }) => {
     return (
         <>
@@ -106,9 +173,11 @@ const CertFileRow = ({ onValueChanged, dialogValues }) => {
             </label>
             <FileAutoComplete id="cert-file"
                 superuser="try"
-                placeholder={_("Path to store the certificate")}
+                placeholder={dialogValues._mode === "request"
+                    ? _("Path to store the certificate")
+                    : _("Path to an existing certificate file")}
                 onChange={value => onValueChanged("certFile", value)}
-                fileExists={false} />
+                fileExists={dialogValues._mode === "import"} />
         </>
     );
 };
@@ -121,24 +190,170 @@ const KeyFileRow = ({ onValueChanged, dialogValues }) => {
             </label>
             <FileAutoComplete id="key-file"
                 superuser="try"
-                placeholder={_("Path to store the generated key or to an existing key")}
+                placeholder={dialogValues._mode === "request"
+                    ? _("Path to store the generated key or to an existing key")
+                    : _("Path to an existing key file")}
                 onChange={value => onValueChanged("keyFile", value)}
-                fileExists={false} />
+                fileExists={dialogValues._mode === "import"} />
         </>
     );
 };
+
+export class ResubmitCertificateModal extends React.Component {
+    constructor(props) {
+        super(props);
+
+        this.state = {
+            _mode: "resubmit",
+            ca: getCAName(props.cas, props.cert),
+            storage: props.cert["cert-storage"].v === "NSSDB" ? "nssdb" : "file",
+            nickname: props.cert["cert-nickname"] && props.cert["cert-nickname"].v,
+            certFile: props.cert["cert-file"] && props.cert["cert-file"].v,
+            keyFile: props.cert["key-file"] && props.cert["key-file"].v,
+            subjectName: props.cert.subject && props.cert.subject.v,
+            dnsName: props.cert.hostname && props.cert.hostname.v.join(','),
+            principalName: props.cert.principal && props.cert.principal.v.join(','),
+        };
+
+        this.onValueChanged = this.onValueChanged.bind(this);
+        this.onResubmit = this.onResubmit.bind(this);
+        this.onAddError = this.onAddError.bind(this);
+    }
+
+    onValueChanged(key, value) {
+        const stateDelta = { [key]: value };
+
+        if (key === "dnsName") {
+            value = value.replace(/\s/g, ',');
+            while (value.includes(",,"))
+                value = value.replace(",,", ',');
+            stateDelta.dnsName = value;
+        }
+
+        this.setState(stateDelta);
+    }
+
+    checkParameters() {
+        return null;
+    }
+
+    onAddError(errorName, errorMessage) {
+        this.setState({ errorName, errorMessage });
+    }
+
+    onResubmit() {
+        const { cas, certPath } = this.props;
+        const casKeys = Object.keys(cas);
+        let caPath;
+        casKeys.forEach(key => {
+            if (cas[key].nickname.v === this.state.ca)
+                caPath = key;
+        });
+
+        let subjectName = this.state.subjectName;
+        if (subjectName && !subjectName.includes("="))
+            subjectName = "CN=" + subjectName;
+        let dnsNames;
+        if (this.state.dnsName) {
+            dnsNames = this.state.dnsName.split(',');
+            dnsNames = dnsNames.filter(Boolean); // Removes empty string entries
+        }
+
+        const parameter = { ca: cockpit.variant("s", caPath) };
+        parameter["template-subject"] = subjectName
+            ? cockpit.variant("s", subjectName)
+            : cockpit.variant("s", "");
+        parameter["template-principal"] = this.state.principalName
+            ? cockpit.variant("as", [this.state.principalName])
+            : cockpit.variant("as", [""]);
+        parameter["template-hostname"] = dnsNames
+            ? cockpit.variant("as", dnsNames)
+            : cockpit.variant("as", [""]);
+
+        modifyRequest(certPath, parameter)
+                .then(() => resubmitRequest(certPath))
+                .then(() => this.props.onClose())
+                .catch(error => this.onAddError(error.name, error.message));
+    }
+
+    render() {
+        const { onClose } = this.props;
+        const cas = Object.values(this.props.cas);
+
+        const body = (
+            <form className="ct-form">
+                {this.state.storage === "nssdb" && <>
+                    <label className="control-label" htmlFor="database-path-row">
+                        {_("Database path")}
+                    </label>
+                    <span id="database-path-row">{ this.props.cert["cert-database"].v }</span>
+                    <label className="control-label" htmlFor="storage-row">
+                        {_("Nickname")}
+                    </label>
+                    <span id="nickname-row">{ this.state.nickname }</span>
+                    <hr />
+                </>}
+
+                {this.state.storage === "file" && <>
+                    <label className="control-label" htmlFor="storage-row">
+                        {_("Certificate file")}
+                    </label>
+                    <span id="cert-file-row">{ this.state.certFile }</span>
+                    <label className="control-label" htmlFor="key-file-row">
+                        {_("Key file")}
+                    </label>
+                    <span id="key-file-row">{ this.state.keyFile }</span>
+                    <hr />
+                </>}
+
+                <CAsRow dialogValues={this.state} onValueChanged={this.onValueChanged} cas={cas} />
+
+                <hr />
+
+                <SubjectNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                <DNSNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                <PrincipalNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+            </form>
+        );
+
+        return (
+            <Modal id="resubmit-certificate-dialog" onHide={onClose} show>
+                <Modal.Header>
+                    <Modal.CloseButton onClick={onClose} />
+                    <Modal.Title>{_("Resubmit Certificate")} </Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    {body}
+                </Modal.Body>
+                <Modal.Footer>
+                    {this.state.errorName && <ModalError dialogError={this.state.errorName} dialogErrorDetail={this.state.errorMessage} />}
+                    <Button variant="primary" onClick={this.onResubmit}>
+                        {_("Resubmit")}
+                    </Button>
+                    <Button variant="link" className="btn-cancel" onClick={onClose}>
+                        {_("Cancel")}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+        );
+    }
+}
 
 export class RequestCertificateModal extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
+            _mode: props.mode,
             _hostname: undefined,
             _userChangedNickname: false,
             ca: props.cas[Object.keys(props.cas)[0]] ? props.cas[Object.keys(props.cas)[0]].nickname.v : undefined,
-            storage: "nssdb",
+            storage: props.mode === "request" ? "nssdb" : "file",
             nickname: "",
             certFile: "",
             keyFile: "",
+            subjectName: "",
+            dnsName: "",
+            principalName: "",
         };
 
         this.onValueChanged = this.onValueChanged.bind(this);
@@ -147,23 +362,34 @@ export class RequestCertificateModal extends React.Component {
     }
 
     componentDidMount() {
-        cockpit.file("/etc/hostname", { superuser: "try" }).read()
-                .done((content, tag) => this.onValueChanged("hostname", content.trim()))
-                .catch(error => this.onAddError(error.name, error.message));
+        const { _mode } = this.state;
+
+        if (_mode === "request") {
+            cockpit.file("/etc/hostname", { superuser: "try" }).read()
+                    .done((content, tag) => this.onValueChanged("hostname", content.trim()))
+                    .catch(error => this.onAddError(error.name, error.message));
+        }
     }
 
     onValueChanged(key, value) {
-        const { _userChangedNickname, hostname, ca } = this.state;
+        const { _userChangedNickname, hostname, ca, _mode } = this.state;
         const stateDelta = { [key]: value };
 
-        if (key === "hostname" && !_userChangedNickname) {
+        if (key === "hostname" && !_userChangedNickname && _mode === "request") {
             stateDelta.nickname = value + '_' + ca + '_' + moment().format("DD-MM-YYYYTHH:mm:ss");
+            stateDelta.subjectName = "CN=" + value;
         }
-        if (key === "ca" && !_userChangedNickname) {
+        if (key === "ca" && !_userChangedNickname && _mode === "request") {
             stateDelta.nickname = hostname + '_' + value + '_' + moment().format("DD-MM-YYYYTHH:mm:ss");
         }
         if (key === "nickname")
             stateDelta._userChangedNickname = true;
+        if (key === "dnsName") {
+            value = value.replace(/\s/g, ',');
+            while (value.includes(",,"))
+                value = value.replace(",,", ',');
+            stateDelta.dnsName = value;
+        }
 
         this.setState(stateDelta);
     }
@@ -200,7 +426,20 @@ export class RequestCertificateModal extends React.Component {
             parameter["key-file"] = cockpit.variant("s", this.state.keyFile);
         }
 
-        console.log(parameter);
+        if (this.state.signingParameters) {
+            let subjectName = this.state.subjectName;
+            if (subjectName && !subjectName.includes("="))
+                subjectName = "CN=" + subjectName;
+            let dnsNames = this.state.dnsName.split(',');
+            dnsNames = dnsNames.filter(Boolean); // Removes empty string entries
+
+            if (subjectName)
+                parameter["template-subject"] = cockpit.variant("s", subjectName);
+            if (this.state.principalName)
+                parameter["template-principal"] = cockpit.variant("as", [this.state.principalName]);
+            if (this.state.dnsName)
+                parameter["template-hostname"] = cockpit.variant("as", dnsNames);
+        }
 
         addRequest(parameter)
                 .then(() => this.props.onClose())
@@ -208,7 +447,7 @@ export class RequestCertificateModal extends React.Component {
     }
 
     render() {
-        const { onClose } = this.props;
+        const { onClose, mode } = this.props;
         const cas = Object.values(this.props.cas);
 
         const body = (
@@ -227,9 +466,17 @@ export class RequestCertificateModal extends React.Component {
                     <CertFileRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
                     <hr />
                     <KeyFileRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                    <hr />
                 </>}
 
-                <hr />
+                {this.state._mode === "request" && <>
+                    <SetSigningParametersRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                    {this.state.signingParameters && <div className="ct-form">
+                        <SubjectNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                        <DNSNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                        <PrincipalNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                    </div>}
+                </>}
             </form>
         );
 
@@ -237,7 +484,7 @@ export class RequestCertificateModal extends React.Component {
             <Modal id="request-certificate-dialog" onHide={onClose} show>
                 <Modal.Header>
                     <Modal.CloseButton onClick={onClose} />
-                    <Modal.Title> {_("Request Certificate")} </Modal.Title>
+                    <Modal.Title> {mode === "import" ? _("Import Certificate") : _("Request Certificate")} </Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
                     {body}
@@ -246,7 +493,9 @@ export class RequestCertificateModal extends React.Component {
                     {this.state.errorName && <ModalError dialogError={this.state.errorName} dialogErrorDetail={this.state.errorMessage} />}
                     <Button variant="primary"
                         onClick={this.onRequest}>
-                        {_("Request")}
+                        {mode === "import"
+                            ? _("Import")
+                            : _("Request")}
                     </Button>
                     <Button variant="link" className="btn-cancel" onClick={onClose}>
                         {_("Cancel")}
@@ -277,17 +526,25 @@ export class RequestCertificate extends React.Component {
     }
 
     render() {
+        const { mode } = this.props;
         const cas = Object.values(this.props.cas);
         const canRequest = cas.length !== 0;
 
         return (
             <>
-                <Button id="request-certificate-action"
+                {mode == "import"
+                    ? <Button id="import-certificate-action"
                         variant="secondary"
                         isDisabled={!canRequest}
                         onClick={this.onOpen}>
-                    {_("Request Certificate")}
-                </Button>
+                        {_("Import Certificate")}
+                    </Button>
+                    : <Button id="request-certificate-action"
+                          variant="secondary"
+                          isDisabled={!canRequest}
+                          onClick={this.onOpen}>
+                        {_("Request Certificate")}
+                    </Button>}
 
                 { canRequest && this.state.showDialog &&
                     <RequestCertificateModal onClose={this.onClose} {...this.props} /> }

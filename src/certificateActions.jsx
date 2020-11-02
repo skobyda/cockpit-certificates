@@ -30,6 +30,7 @@ import {
     KebabToggle
 } from "@patternfly/react-core";
 
+import { ResubmitCertificateModal } from './requestCertificate.jsx';
 import { removeRequest } from "./dbus.js";
 
 const _ = cockpit.gettext;
@@ -160,15 +161,26 @@ export class CertificateActions extends React.Component {
         this.state = {
             dropdownOpen: false,
             showRemoveModal: false,
+            showResubmitModal: false,
         };
 
         this.onValueChanged = this.onValueChanged.bind(this);
         this.onRemoveModalOpen = this.onRemoveModalOpen.bind(this);
         this.onRemoveModalClose = this.onRemoveModalClose.bind(this);
+        this.onResubmitModalOpen = this.onResubmitModalOpen.bind(this);
+        this.onResubmitModalClose = this.onResubmitModalClose.bind(this);
     }
 
     onValueChanged(key, value) {
         this.setState({ [key]: value });
+    }
+
+    onResubmitModalOpen() {
+        this.setState({ showResubmitModal: true });
+    }
+
+    onResubmitModalClose() {
+        this.setState({ showResubmitModal: false });
     }
 
     onRemoveModalOpen() {
@@ -180,10 +192,16 @@ export class CertificateActions extends React.Component {
     }
 
     render() {
-        const { idPrefix } = this.props;
-        const { dropdownOpen, showRemoveModal } = this.state;
+        const { idPrefix, cas, addAlert, cert, certPath } = this.props;
+        const { dropdownOpen, showRemoveModal, showResubmitModal } = this.state;
 
         const dropdownItems = [
+            <DropdownItem
+                key={`${idPrefix}-resubmit`}
+                id={`${idPrefix}-resubmit`}
+                onClick={this.onResubmitModalOpen}>
+                {_("Resubmit")}
+            </DropdownItem>,
             <DropdownItem className="pf-m-danger"
                 key={`${idPrefix}-remove`}
                 id={`${idPrefix}-remove`}
@@ -205,7 +223,16 @@ export class CertificateActions extends React.Component {
                     dropdownItems={dropdownItems}
                     isPlain />
 
-                {showRemoveModal && <RemoveModal onClose={this.onRemoveModalClose} {...this.props} />}
+                {showRemoveModal &&
+                    <RemoveModal onClose={this.onRemoveModalClose}
+                        {...this.props} />}
+                {showResubmitModal &&
+                    <ResubmitCertificateModal onClose={this.onResubmitModalClose}
+                        cas={cas}
+                        addAlert={addAlert}
+                        cert={cert}
+                        certPath={certPath}
+                        mode="resubmit" />}
             </>
         );
     }

@@ -60,3 +60,8 @@ export function removeRequest(requestPath, updates) {
     return dbusCall("/org/fedorahosted/certmonger", "org.fedorahosted.certmonger",
                     "remove_request", [requestPath]);
 }
+
+export function resubmitRequest(requestPath) {
+    return dbusCall(requestPath, "org.fedorahosted.certmonger.request",
+                    "resubmit", []);
+}
