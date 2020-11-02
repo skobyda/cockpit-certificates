@@ -23,7 +23,9 @@ import moment from "moment";
 import { Modal } from "patternfly-react";
 import {
     Button,
+    FormGroup,
     Radio,
+    TextArea,
     TextInput
 } from "@patternfly/react-core";
 
@@ -79,6 +81,67 @@ const CAsRow = ({ onValueChanged, dialogValues, cas }) => {
                     );
                 })}
             </Select.Select>
+        </>
+    );
+};
+
+const SetSigningParametersRow = ({ onValueChanged, dialogValues }) => {
+    return (
+        <label className='checkbox-inline'>
+            <input id='set-signing-parameters'
+                type='checkbox'
+                checked={dialogValues.signingParameters}
+                onChange={e => onValueChanged("signingParameters", !dialogValues.signingParameters)} />
+            {_("Set optional signing request parameters")}
+        </label>
+    );
+};
+
+const SubjectNameRow = ({ onValueChanged, dialogValues }) => {
+    return (
+        <>
+            <label className="control-label" htmlFor="subject-name">
+                {_("Subject name")}
+            </label>
+            <TextInput value={dialogValues.subjectName}
+                id="subject-name"
+                type="text"
+                onChange={(value) => onValueChanged("subjectName", value)}
+                aria-label={_("SubjectName input text")} />
+        </>
+    );
+};
+
+const DNSNameRow = ({ onValueChanged, dialogValues }) => {
+    return (
+        <>
+            <label className="control-label" htmlFor="dns-name">
+                {_("DNS names")}
+            </label>
+            <FormGroup validated="default"
+                fieldId="dns-name"
+                helperText={_("Comma separated list of DNS names. Example: example.com,sub.example.com")}>
+                <TextArea value={dialogValues.dnsName}
+                    id="dns-name"
+                    onChange={(value) => onValueChanged("dnsName", value)}
+                    resizeOrientation='vertical'
+                    aria-label={_("DNSName input text")} />
+            </FormGroup>
+        </>
+    );
+};
+
+const PrincipalNameRow = ({ onValueChanged, dialogValues }) => {
+    return (
+        <>
+            <label className="control-label" htmlFor="principal-name">
+                {_("Principal name")}
+            </label>
+            <TextInput value={dialogValues.principalName}
+                id="principal-name"
+                type="text"
+                onChange={(value) => onValueChanged("principalName", value)}
+                aria-label={_("PrincipalName input text")} />
         </>
     );
 };
@@ -139,6 +202,10 @@ export class RequestCertificateModal extends React.Component {
             nickname: "",
             certFile: "",
             keyFile: "",
+            subjectName: "",
+            dnsName: "",
+            principalName: "",
+            signingParameters: false,
         };
 
         this.onValueChanged = this.onValueChanged.bind(this);
@@ -158,12 +225,19 @@ export class RequestCertificateModal extends React.Component {
 
         if (key === "hostname" && !_userChangedNickname) {
             stateDelta.nickname = value + '_' + ca + '_' + moment().format("DD-MM-YYYYTHH:mm:ss");
+            stateDelta.subjectName = "CN=" + value;
         }
         if (key === "ca" && !_userChangedNickname) {
             stateDelta.nickname = hostname + '_' + value + '_' + moment().format("DD-MM-YYYYTHH:mm:ss");
         }
         if (key === "nickname")
             stateDelta._userChangedNickname = true;
+        if (key === "dnsName") {
+            value = value.replace(/\s/g, ',');
+            while (value.includes(",,"))
+                value = value.replace(",,", ',');
+            stateDelta.dnsName = value;
+        }
 
         this.setState(stateDelta);
     }
@@ -200,7 +274,20 @@ export class RequestCertificateModal extends React.Component {
             parameter["key-file"] = cockpit.variant("s", this.state.keyFile);
         }
 
-        console.log(parameter);
+        if (this.state.signingParameters) {
+            let subjectName = this.state.subjectName;
+            if (subjectName && !subjectName.includes("="))
+                subjectName = "CN=" + subjectName;
+            let dnsNames = this.state.dnsName.split(',');
+            dnsNames = dnsNames.filter(Boolean); // Removes empty string entries
+
+            if (subjectName)
+                parameter["template-subject"] = cockpit.variant("s", subjectName);
+            if (this.state.principalName)
+                parameter["template-principal"] = cockpit.variant("as", [this.state.principalName]);
+            if (this.state.dnsName)
+                parameter["template-hostname"] = cockpit.variant("as", dnsNames);
+        }
 
         addRequest(parameter)
                 .then(() => this.props.onClose())
@@ -221,15 +308,19 @@ export class RequestCertificateModal extends React.Component {
                 {this.state.storage === "nssdb" &&
                     <NicknameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />}
 
-                <hr />
-
                 {this.state.storage === "file" && <>
                     <CertFileRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
-                    <hr />
                     <KeyFileRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
                 </>}
 
                 <hr />
+
+                <SetSigningParametersRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                {this.state.signingParameters && <div className="ct-form">
+                    <SubjectNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                    <DNSNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                    <PrincipalNameRow dialogValues={this.state} onValueChanged={this.onValueChanged} />
+                </div>}
             </form>
         );
 

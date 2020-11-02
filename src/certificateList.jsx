@@ -25,6 +25,8 @@ import {
     Badge,
     Flex,
     FlexModifiers,
+    Text,
+    TextVariants,
     Tooltip,
     TooltipPosition
 } from "@patternfly/react-core";
@@ -123,60 +125,97 @@ function getCAName(cas, cert) {
 }
 
 const generalDetails = ({ idPrefix, cas, cert, certPath, onAutorenewChanged }) => (
-    <Flex breakpointMods={[{ modifier: FlexModifiers["justify-content-space-between"] }]}>
-        <Flex breakpointMods={[{ modifier: FlexModifiers.column }, { modifier: FlexModifiers["flex-1"] }]}>
-            <div className="ct-form">
-                {cert.status && cert.status.v && <>
-                    <label className='control-label label-title' htmlFor={`${idPrefix}-general-status`}>{_("Status")}</label>
-                    <div id={`${idPrefix}-general-status`} role="group">
-                        {cert.stuck.v && (<span>
-                            <span className="fa fa-exclamation-triangle" />
-                            <span id={`${idPrefix}-general-stuck`}>{_("Stuck: ")}</span>
-                        </span>)}
-                        <span>
-                            {cert.status.v.includes('_')
-                                ? cert.status.v
-                                : cert.status.v.charAt(0) + cert.status.v.slice(1).toLowerCase()}
-                            <Tooltip position={TooltipPosition.top}
-                                entryDelay={0}
-                                content={certificateStates[cert.status.v]}>
-                                <span className="info-circle">
-                                    <InfoAltIcon />
-                                </span>
-                            </Tooltip>
+    <Flex breakpointMods={[{ modifier: FlexModifiers.column }]}>
+        <Flex breakpointMods={[{ modifier: FlexModifiers["justify-content-space-between"] }]}>
+            <Flex breakpointMods={[{ modifier: FlexModifiers.column }, { modifier: FlexModifiers["flex-1"] }]}>
+                <div className="ct-form">
+                    {cert.status && cert.status.v && <>
+                        <label className='control-label label-title' htmlFor={`${idPrefix}-general-status`}>{_("Status")}</label>
+                        <div id={`${idPrefix}-general-status`} role="group">
+                            {cert.stuck.v && (<span>
+                                <span className="fa fa-exclamation-triangle" />
+                                <span id={`${idPrefix}-general-stuck`}>{_("Stuck: ")}</span>
+                            </span>)}
+                            <span>
+                                {cert.status.v.includes('_')
+                                    ? cert.status.v
+                                    : cert.status.v.charAt(0) + cert.status.v.slice(1).toLowerCase()}
+                                <Tooltip position={TooltipPosition.top}
+                                    entryDelay={0}
+                                    content={certificateStates[cert.status.v]}>
+                                    <span className="info-circle">
+                                        <InfoAltIcon />
+                                    </span>
+                                </Tooltip>
+                            </span>
+                        </div>
+                    </>}
+                    {cert.ca && cert.ca.v && <>
+                        <label className='control-label label-title' htmlFor={`${idPrefix}-general-ca`}>{_("CA")}</label>
+                        <span id={`${idPrefix}-general-ca`}>{getCAName(cas, cert)}</span>
+                    </>}
+                </div>
+            </Flex>
+            <Flex breakpointMods={[{ modifier: FlexModifiers.column }, { modifier: FlexModifiers["flex-1"] }]}>
+                <div className="ct-form">
+                    {cert["not-valid-after"] && cert["not-valid-after"].v !== 0 && <>
+                        <label className='control-label label-title' htmlFor={`${idPrefix}-general-validity`}>
+                            {_("Valid")}
+                        </label>
+                        <span id={`${idPrefix}-general-validity`}>
+                            {prettyTime(cert["not-valid-before"].v) +
+                            _(" to ") + prettyTime(cert["not-valid-after"].v)}
                         </span>
-                    </div>
-                </>}
-                {cert.ca && cert.ca.v && <>
-                    <label className='control-label label-title' htmlFor={`${idPrefix}-general-ca`}>{_("CA")}</label>
-                    <span id={`${idPrefix}-general-ca`}>{getCAName(cas, cert)}</span>
-                </>}
-            </div>
+                    </>}
+                    {cert.autorenew && <>
+                        <label className='control-label label-title' htmlFor={`${idPrefix}-general-autorenewal`}>
+                            {_("Auto-renewal")}
+                        </label>
+                        <label className='checkbox-inline'>
+                            <input id={`${idPrefix}-general-autorenewal`}
+                                   type="checkbox"
+                                   checked={cert.autorenew.v}
+                                   onChange={() => onAutorenewChanged(cert, certPath)} />
+                            {_("Renew before expiration")}
+                        </label>
+                    </>}
+                </div>
+            </Flex>
         </Flex>
-        <Flex breakpointMods={[{ modifier: FlexModifiers.column }, { modifier: FlexModifiers["flex-1"] }]}>
-            <div className="ct-form">
-                {cert["not-valid-after"] && cert["not-valid-after"].v !== 0 && <>
-                    <label className='control-label label-title' htmlFor={`${idPrefix}-general-validity`}>
-                        {_("Valid")}
-                    </label>
-                    <span id={`${idPrefix}-general-validity`}>
-                        {prettyTime(cert["not-valid-before"].v) +
-                        _(" to ") + prettyTime(cert["not-valid-after"].v)}
-                    </span>
-                </>}
-                {cert.autorenew && <>
-                    <label className='control-label label-title' htmlFor={`${idPrefix}-general-autorenewal`}>
-                        {_("Auto-renewal")}
-                    </label>
-                    <label className='checkbox-inline'>
-                        <input id={`${idPrefix}-general-autorenewal`}
-                               type="checkbox"
-                               checked={cert.autorenew.v}
-                               onChange={() => onAutorenewChanged(cert, certPath)} />
-                        {_("Renew before expiration")}
-                    </label>
-                </>}
-            </div>
+
+        <Text component={TextVariants.h5}>
+            {_("Signing request properties")}
+        </Text>
+
+        <Flex breakpointMods={[{ modifier: FlexModifiers["justify-content-space-between"] }]}>
+            <Flex breakpointMods={[{ modifier: FlexModifiers.column }, { modifier: FlexModifiers["flex-1"] }]}>
+                <div className='ct-form'>
+                    {cert.subject && cert.subject.v && <>
+                        <label className='control-label label-title' htmlFor={`${idPrefix}-general-subject`}>
+                            {_("Subject name")}
+                        </label>
+                        <span id={`${idPrefix}-general-subject`}>{cert.subject.v}</span>
+                    </>}
+
+                    {cert.principal && cert.principal.v.length > 0 && <>
+                        <label className='control-label label-title' htmlFor={`${idPrefix}-general-principal`}>
+                            {_("Principal name")}
+                        </label>
+                        <span id={`${idPrefix}-general-principal`}>{cert.principal.v.join(", ")}</span>
+                    </>}
+                </div>
+            </Flex>
+
+            <Flex breakpointMods={[{ modifier: FlexModifiers.column }, { modifier: FlexModifiers["flex-1"] }]}>
+                <div className='ct-form'>
+                    {cert.hostname && cert.hostname.v.length > 0 && <>
+                        <label className='control-label label-title' htmlFor={`${idPrefix}-general-dns`}>
+                            {_("DNS name")}
+                        </label>
+                        <span id={`${idPrefix}-general-dns`}>{cert.hostname.v.join(", ")}</span>
+                    </>}
+                </div>
+            </Flex>
         </Flex>
     </Flex>
 );

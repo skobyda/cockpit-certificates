@@ -319,8 +319,8 @@ class TestApplication(testlib.MachineCase):
 
         class RequestCertDialog(object):
             def __init__(
-                self, test_obj, ca=None, storage_type="NSSDB", nickname=None,
-                key_path="", cert_path=""
+                self, test_obj, ca="SelfSign", storage_type="NSSDB", nickname=None,
+                key_path="", cert_path="", subject_name=None, dns_name=None, principal_name=None,
             ):
                 self.test_obj = test_obj
                 self.ca = ca
@@ -328,6 +328,9 @@ class TestApplication(testlib.MachineCase):
                 self.nickname = nickname
                 self.cert_path = cert_path
                 self.key_path = key_path
+                self.subject_name = subject_name
+                self.dns_name = dns_name
+                self.principal_name = principal_name
 
             def execute(self):
                 self.open()
@@ -354,6 +357,16 @@ class TestApplication(testlib.MachineCase):
                     b.set_input_text("input[placeholder='Path to store the certificate']", self.cert_path)
                     b.set_input_text("input[placeholder='Path to store the generated key or to an existing key']", self.key_path)
 
+                if self.subject_name or self.dns_name or self.principal_name:
+                    b.click("#set-signing-parameters")
+
+                    if self.subject_name:
+                        b.set_input_text("#subject-name", self.subject_name)
+                    if self.dns_name:
+                        b.set_input_text("#dns-name", self.dns_name)
+                    if self.principal_name:
+                        b.set_input_text("#principal-name", self.principal_name)
+
             def cancel(self):
                 b.click(".modal-footer button:contains(Cancel)")
                 b.wait_not_present(".modal-dialog")
@@ -368,12 +381,20 @@ class TestApplication(testlib.MachineCase):
                     self.nickname = b.text("#certificate-0-name")
 
                 b.click("button#expandable-toggle0")
+
+                if self.subject_name:
+                    b.wait_in_text("#certificate-0-general-subject", self.subject_name)
+                if self.principal_name:
+                    b.wait_in_text("#certificate-0-general-principal", self.principal_name)
+                if self.dns_name:
+                    b.wait_in_text("#certificate-0-general-dns", self.dns_name)
+
                 if self.storage_type == "NSSDB":
-                        b.wait_in_text("#certificate-0-name", self.nickname)
-                        b.click("#certificate-0-cert-tab")
-                        b.wait_in_text("#certificate-0-cert-storage", "NSSDB")
-                        b.click("#certificate-0-keys-tab")
-                        b.wait_in_text("#certificate-0-key-storage", "NSSDB")
+                    b.wait_in_text("#certificate-0-name", self.nickname)
+                    b.click("#certificate-0-cert-tab")
+                    b.wait_in_text("#certificate-0-cert-storage", "NSSDB")
+                    b.click("#certificate-0-keys-tab")
+                    b.wait_in_text("#certificate-0-key-storage", "NSSDB")
                 else:
                     if self.key_path:
                         b.click("#certificate-0-keys-tab")
@@ -383,15 +404,26 @@ class TestApplication(testlib.MachineCase):
                         b.wait_in_text("#certificate-0-cert-location", self.cert_path)
 
             def verify_backend(self):
+                if self.subject_name:
+                    command_output = m.execute("getcert list -d /etc/pki/nssdb -n {0} | grep 'subject:' | awk '{{print $2}}'".format(self.nickname))
+                    self.test_obj.assertEqual(command_output, "CN={0}\n".format(self.subject_name))
+                if self.dns_name:
+                    command_output = m.execute("getcert list -d /etc/pki/nssdb -n {0} | grep 'dns:' | awk '{{print $2}}'".format(self.nickname))
+                    self.test_obj.assertEqual(command_output, "{0}\n".format(self.dns_name))
+                if self.principal_name:
+                    command_output = m.execute("getcert list -d /etc/pki/nssdb -n {0} | grep 'principal name:' | awk '{{print $3}}'".format(self.nickname))
+                    self.test_obj.assertEqual(command_output, "{0}\n".format(self.principal_name))
+
                 if self.storage_type == "NSSDB":
-                    command_output = m.execute("selfsign-getcert list -d /etc/pki/nssdb -n {0} | grep 'key pair storage:' | awk '{{print $4}}'".format(self.nickname))
-                    self.test_obj.assertEqual(command_output, "type=NSSDB,location='/etc/pki/nssdb',nickname='{0}',token='NSS\n".format(self.nickname))
-                    command_output = m.execute("selfsign-getcert list -d /etc/pki/nssdb -n {0} | grep 'certificate:' | awk '{{print $2}}'".format(self.nickname))
-                    self.test_obj.assertEqual(command_output, "type=NSSDB,location='/etc/pki/nssdb',nickname='{0}',token='NSS\n".format(self.nickname))
+                    command_output = m.execute("getcert list -d /etc/pki/nssdb -n {0} | grep 'key pair storage:' | awk '{{print $4}}'".format(self.nickname))
+                    print(command_output)
+                    self.test_obj.assertTrue("type=NSSDB,location='/etc/pki/nssdb',nickname='{0}'".format(self.nickname) in command_output)
+                    command_output = m.execute("getcert list -d /etc/pki/nssdb -n {0} | grep 'certificate:' | awk '{{print $2}}'".format(self.nickname))
+                    self.test_obj.assertTrue("type=NSSDB,location='/etc/pki/nssdb',nickname='{0}'".format(self.nickname) in command_output)
                 elif self.storage_type == "File":
-                    command_output = m.execute("selfsign-getcert list -f {0} | grep 'key pair storage:' | awk '{{print $4}}'".format(self.cert_path))
+                    command_output = m.execute("getcert list -f {0} | grep 'key pair storage:' | awk '{{print $4}}'".format(self.cert_path))
                     self.test_obj.assertEqual(command_output, "type=FILE,location='{0}'\n".format(self.key_path))
-                    command_output = m.execute("selfsign-getcert list -f {0} | grep 'certificate:' | awk '{{print $2}}'".format(self.cert_path))
+                    command_output = m.execute("getcert list -f {0} | grep 'certificate:' | awk '{{print $2}}'".format(self.cert_path))
                     self.test_obj.assertEqual(command_output, "type=FILE,location='{0}'\n".format(self.cert_path))
 
             def cleanup(self):
@@ -424,6 +456,15 @@ class TestApplication(testlib.MachineCase):
             storage_type="File",
         ).execute()
 
+        # Test subject name, dns name and principal name
+        RequestCertDialog(
+            self,
+            nickname="testcert3",
+            storage_type="NSSDB",
+            subject_name="TEST_HOSTNAME",
+            dns_name="example.com",
+            principal_name="HTTP/TEST_HOSTNAME",
+        ).execute()
 
 if __name__ == '__main__':
     testlib.test_main()

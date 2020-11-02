@@ -282,11 +282,13 @@
   }
 
   // Move warnings, errors, info, etc. up a bit to associate with previous field
+  > .pf-c-form__helper-text,
   > .help-block {
     position: relative;
     margin-top: -0.5rem;
   }
 
+  .pf-c-form__helper-text,
   .help-block {
     --help-line-height: calc(var(--pf-global--LineHeight--md) * 1rem);
     line-height: var(--help-line-height);
